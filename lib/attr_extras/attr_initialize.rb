@@ -21,7 +21,7 @@ class AttrExtras::AttrInitialize
     klass.send(:define_method, :initialize) do |*values|
       hash_values = (values[(klass_params.positional_args.length)..-1] || []).inject(:merge) || {}
 
-      validate_arity.call(values.length, self.class)
+      validate_arity.call(values.length, self.class, klass_params)
       validate_args.call(values, klass_params)
 
       klass_params.default_values.each do |name, default_value|
@@ -32,7 +32,12 @@ class AttrExtras::AttrInitialize
         instance_variable_set("@#{name}", value)
       end
 
-      hash_values.each do |name, value|
+      if klass_params.splat
+        splat_values = hash_values.select{|k, _| !klass_params.hash_args_names.include?(k)}
+        instance_variable_set("@#{klass_params.splat_name}", splat_values)
+      end
+
+      hash_values.select{|k, _| klass_params.hash_args_names.include?(k)}.each do |name, value|
         instance_variable_set("@#{name}", value)
       end
 
@@ -44,9 +49,9 @@ class AttrExtras::AttrInitialize
 
   private
 
-  def validate_arity(provided_arity, klass)
-    arity_without_hashes = names.count { |name| not name.is_a?(Array) }
-    arity_with_hashes    = names.length
+  def validate_arity(provided_arity, klass, klass_params)
+    arity_without_hashes = names.count { |name| !name.is_a?(Array) && !name.to_s.start_with?("**") }
+    arity_with_hashes    = klass_params.splat ? [provided_arity, names.length].max : names.length
 
     unless (arity_without_hashes..arity_with_hashes).include?(provided_arity)
       arity_range = [ arity_without_hashes, arity_with_hashes ].uniq.join("..")
@@ -58,7 +63,7 @@ class AttrExtras::AttrInitialize
     hash_values = values[(klass_params.positional_args.length)..-1].inject(:merge) || {}
     unknown_keys = hash_values.keys - klass_params.hash_args_names
 
-    if unknown_keys.any?
+    if !klass_params.splat && unknown_keys.any?
       raise ArgumentError, "Got unknown keys: #{unknown_keys.inspect}; allowed keys: #{klass_params.hash_args_names.inspect}"
     end
 

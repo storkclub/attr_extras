@@ -2,6 +2,7 @@ module AttrExtras
   class AttrInitialize
     class ParamsBuilder
       REQUIRED_SIGN = "!".freeze
+      SPLAT_SIGN = "**".freeze
 
       def initialize(names)
         @names = names
@@ -15,9 +16,18 @@ module AttrExtras
       end
 
       def hash_args
-        @hash_args ||= (names - positional_args).flatten.flat_map { |name|
+        @hash_args ||= (names - positional_args - [splat]).flatten.flat_map { |name|
           name.is_a?(Hash) ? name.keys : name
         }
+      end
+
+      def splat
+        @splat ||= names.find{|name|name.to_s.start_with?(SPLAT_SIGN)}
+      end
+
+      def splat_name
+        return unless splat
+        splat.to_s.sub(/\A#{Regexp.escape(SPLAT_SIGN)}/, "").to_sym
       end
 
       def hash_args_names
